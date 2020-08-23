@@ -25,7 +25,7 @@
            (fn [prev-state]
              (let [players (vals (:clients prev-state))]
                (-> prev-state
-                   (assoc :game-state (create-game players seed))
+                   (assoc :game-state (create-game players [:insanitys-grasp] seed))
                    (assoc :action-log [])))))))
 
 (defn player-join!

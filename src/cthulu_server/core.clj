@@ -41,26 +41,39 @@
                                                  shuffled-cards)]
     [seed shuffled-cards-and-card-ids]))
 
-(defn- generate-shuffled-deck
+(defn generate-shuffled-deck
   {:test (fn []
-           (is (= (->> (generate-shuffled-deck 0 4)
+           (is (= (->> (generate-shuffled-deck 0 4 [])
+                       (second)
                        (filter #(= :futile (:entity %)))
                        (count))
-                  15)))}
-  [seed number-of-players]
+                  15))
+           (is (= (->> (generate-shuffled-deck 0 4 [:insanitys-grasp])
+                       (second)
+                       (filter #(= :insanitys-grasp (:entity %)))
+                       (count))
+                  1))
+           (is (= (->> (generate-shuffled-deck 0 4 [:insanitys-grasp])
+                       (second)
+                       (count))
+                  20)))}
+  [seed number-of-players objects-of-power]
   (let [full-deck (concat
                    (repeat number-of-players {:entity :elder-sign})
-                   (repeat (dec (* 4 number-of-players)) {:entity :futile})
+                   (repeat (- (dec (* 4 number-of-players)) (count objects-of-power)) {:entity :futile})
+                   (map #(-> {:entity %}) objects-of-power)
                    [{:entity :cthulu}])]
     (shuffle-cards-and-card-ids seed (map-indexed #(assoc %2 :id %1) full-deck))))
 
 (defn create-game
   "Creates a game of Don't Mess With Cthulu.\nExpects a list of player maps: {:name \"Name\" :id id}"
   ([players]
-   (create-game players 0))
-  ([players seed]
+   (create-game players [] 0))
+  ([players objects-of-power]
+   (create-game players objects-of-power 0))
+  ([players objects-of-power seed]
    (let [number-of-players (count players)
-         [seed shuffled-deck] (generate-shuffled-deck seed number-of-players)
+         [seed shuffled-deck] (generate-shuffled-deck seed number-of-players objects-of-power)
          [seed shuffled-identity-list] (shuffle-with-seed seed (identity-list number-of-players))
          [seed starting-player-id] (get-random-int seed number-of-players)
          hands (partition 5 shuffled-deck)]
