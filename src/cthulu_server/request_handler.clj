@@ -23,7 +23,7 @@
                     (update :cards (fn [cards] (map #(assoc % :entity :unknown) cards))))))
             players)))))
 
-(defn- prepare-game-state-for-all-channels
+(defn prepare-game-state-for-all-channels
   [state]
   (map (fn [[channel {player-id :id}]]
          [channel (-> state
@@ -56,7 +56,7 @@
     
     "clear-game"
     (let [{clients :clients} (clear-game!)]
-      (println clients)
+      ;(println clients)
       (map (fn [[ch {id :id}]] [ch {:players   (vals clients)
                                     :client-id id}])
            clients))))

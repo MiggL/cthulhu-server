@@ -21,7 +21,7 @@
                            :on-receive (fn [channel message-str]
                                          (let [to-send (handler channel message-str)]
                                            (println "to-send:")
-                                           (println (map second to-send))
+                                           (println (map first to-send))
                                            (run! (fn [[ch response]]
                                                    (send! ch (str response)))
                                                  to-send)))}))
@@ -39,4 +39,9 @@
 (comment
   (start!)
   (stop!)
+
+  (let [state @cthulu-server.game-handler/state-atom]
+    (run! (fn [[ch data]]
+            (send! ch (str data)))
+          (cthulu-server.request-handler/prepare-game-state-for-all-channels state)))
   )
