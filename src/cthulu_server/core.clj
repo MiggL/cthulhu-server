@@ -85,6 +85,8 @@
                                              (assoc :cards (nth hands i))))
                                        players))
       :revealed-cards    []
+      :reshuffle-pile    []
+      :active-powers     []
       :player-id-in-turn starting-player-id
       :round             1
       :round-action      1
@@ -140,14 +142,40 @@
     (-> state
         (update :round inc)
         (assoc :round-action 1)
+        (assoc :active-powers [])
         (maybe-redistribute-unrevealed-cards))))
+
+(defn- update-player-id-in-turn
+  [state player-id]
+  (if (some #(= :paranoia %) (:active-powers state))
+    state
+    (assoc state :player-id-in-turn player-id)))
+
+(defn- activate-power
+  [state target-card-entity]
+  (condp = target-card-entity
+    :paranoia (update state :active-powers conj :paranoia)
+    state))
 
 (defn reveal-card
   {:test (fn []
            (is (= (-> (create-game [{:name "Miguel" :id 0} {:id 1 :name "Lina"} {:id 2 :name "Louise"}])
                       (reveal-card 1 0 9)
                       (:revealed-cards))
-                  [{:entity :futile :from-player-id 0}])))}
+                  [{:entity :futile :from-player-id 0}]))
+           (is (= (-> (create-game [{:name "Miguel" :id 0} {:id 1 :name "Lina"} {:id 2 :name "Louise"}])
+                      (reveal-card 1 0 9)
+                      (:player-id-in-turn))
+                  0))
+           (is (= (-> (create-game [{:name "Miguel" :id   0}
+                                    {:id   1 :name "Lina"}
+                                    {:id   2 :name "Louise"}]
+                                   [:insanitys-grasp :paranoia])
+                      (reveal-card 1 2 2)
+                      (reveal-card 2 1 1)
+                      (reveal-card 2 1 4)
+                      (:player-id-in-turn))
+                  1)))}
   [state player-id target-player-id card-id]
   (when-not (= player-id (:player-id-in-turn state))
     (throw (AssertionError. (str "Player with id " player-id " is not in turn!"))))
@@ -156,13 +184,15 @@
         (remove-card-from-player target-player-id card-id)
         (update :revealed-cards conj (-> (dissoc revealed-card :id)
                                          (assoc :from-player-id target-player-id)))
-        (assoc :player-id-in-turn target-player-id)
-        (update-round))))
+        (update-round)
+        (update-player-id-in-turn target-player-id)
+        (activate-power (:entity revealed-card)))))
 
 (comment
   (-> (create-game [{:name "Miguel" :id 0}
                     {:id 1 :name "Lina"}
-                    {:id 2 :name "Louise"}])
+                    {:id 2 :name "Louise"}]
+                   [:insanitys-grasp :paranoia])
       (reveal-card 1 0 3)
       (reveal-card 0 1 13)
       (maybe-redistribute-unrevealed-cards))
