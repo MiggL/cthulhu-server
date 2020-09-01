@@ -1,7 +1,10 @@
 (ns cthulu-server.core
   (:require [clojure.test :refer [is]]
+            [clojure.data :refer [diff]]
             [ysera.random :refer [shuffle-with-seed
                                   get-random-int]]))
+
+(def valid-objects-of-power [:insanitys-grasp :paranoia])
 
 (defn- potential-number-of-investigators
   [number-of-players]
@@ -72,6 +75,8 @@
   ([players objects-of-power]
    (create-game players objects-of-power 0))
   ([players objects-of-power seed]
+   (when-not (empty? (first (diff objects-of-power valid-objects-of-power)))
+     (throw (AssertionError. "Invalid objects of power.")))
    (let [number-of-players (count players)
          [seed shuffled-deck] (generate-shuffled-deck seed number-of-players objects-of-power)
          [seed shuffled-identity-list] (shuffle-with-seed seed (identity-list number-of-players))
