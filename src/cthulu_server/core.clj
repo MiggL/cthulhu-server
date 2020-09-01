@@ -154,7 +154,9 @@
 (defn- activate-power
   [state target-card-entity]
   (condp = target-card-entity
-    :paranoia (update state :active-powers conj :paranoia)
+    :paranoia (if (= 1 (:round-action state))
+                state
+                (update state :active-powers conj :paranoia))
     state))
 
 (defn reveal-card
@@ -175,7 +177,17 @@
                       (reveal-card 2 1 1)
                       (reveal-card 2 1 4)
                       (:player-id-in-turn))
-                  1)))}
+                  1))
+           (is (= (-> (create-game [{:name "Miguel" :id   0}
+                                    {:id   1 :name "Lina"}
+                                    {:id   2 :name "Louise"}]
+                                   [:insanitys-grasp :paranoia])
+                      (reveal-card 1 0 9)
+                      (reveal-card 0 1 1)
+                      (reveal-card 1 2 2)
+                      (reveal-card 2 0 0)
+                      (:player-id-in-turn))
+                  0)))}
   [state player-id target-player-id card-id]
   (when-not (= player-id (:player-id-in-turn state))
     (throw (AssertionError. (str "Player with id " player-id " is not in turn!"))))
