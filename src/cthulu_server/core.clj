@@ -1,10 +1,10 @@
 (ns cthulu-server.core
   (:require [clojure.test :refer [is]]
-            [clojure.data :refer [diff]]
+            [clojure.set :refer [difference]]
             [ysera.random :refer [shuffle-with-seed
                                   get-random-int]]))
 
-(def valid-objects-of-power [:insanitys-grasp :paranoia])
+(def valid-objects-of-power #{:insanitys-grasp :paranoia :evil-presence})
 
 (defn- potential-number-of-investigators
   [number-of-players]
@@ -75,7 +75,7 @@
   ([players objects-of-power]
    (create-game players objects-of-power 0))
   ([players objects-of-power seed]
-   (when-not (empty? (first (diff objects-of-power valid-objects-of-power)))
+   (when-not (empty? (difference (into #{} objects-of-power) valid-objects-of-power))
      (throw (AssertionError. "Invalid objects of power.")))
    (let [number-of-players (count players)
          [seed shuffled-deck] (generate-shuffled-deck seed number-of-players objects-of-power)
@@ -102,6 +102,13 @@
   (->> (:players state)
        (filter #(= player-id (:id %)))
        (first)))
+
+(defn- update-player
+  [state player-id update-fn]
+  (update state :players (fn [players]
+                           (map
+                            #(if (= player-id (:id %)) (update-fn %) %)
+                            players))))
 
 (defn get-card
   [state player-id card-id]
@@ -130,7 +137,7 @@
   [state]
   (if (game-ended? state)
     state
-    (let [unrevealed-cards (mapcat :cards (:players state))
+    (let [unrevealed-cards (concat (:reshuffle-pile state) (mapcat :cards (:players state)))
           [seed shuffled-cards] (shuffle-with-seed (:seed state) unrevealed-cards)
           partitioned-cards (partition (- 6 (:round state)) (map-indexed #(assoc %2 :id %1) shuffled-cards))]
       (-> state
@@ -157,12 +164,17 @@
     (assoc state :player-id-in-turn player-id)))
 
 (defn- activate-power
-  [state target-card-entity]
-  (condp = target-card-entity
-    :paranoia (if (= 1 (:round-action state))
-                state
-                (update state :active-powers conj :paranoia))
-    state))
+  [state target-player-id target-card-entity]
+  ; round is updated just before this function is called,
+  ; so we need to make sure powers don't activate when a new round starts
+  (if (= 1 (:round-action state))
+    state
+    (condp = target-card-entity
+      :paranoia (update state :active-powers conj :paranoia)
+      :evil-presence (-> state
+                         (update :reshuffle-pile concat (:cards (get-player state target-player-id)))
+                         (update-player target-player-id #(assoc % :cards [])))
+      state)))
 
 (defn reveal-card
   {:test (fn []
@@ -174,25 +186,34 @@
                       (reveal-card 1 0 9)
                       (:player-id-in-turn))
                   0))
-           (is (= (-> (create-game [{:name "Miguel" :id   0}
-                                    {:id   1 :name "Lina"}
-                                    {:id   2 :name "Louise"}]
+           (is (= (-> (create-game [{:name "Miguel" :id   0} {:id   1 :name "Lina"} {:id   2 :name "Louise"}]
                                    [:insanitys-grasp :paranoia])
                       (reveal-card 1 2 2)
                       (reveal-card 2 1 1)
                       (reveal-card 2 1 4)
                       (:player-id-in-turn))
                   1))
-           (is (= (-> (create-game [{:name "Miguel" :id   0}
-                                    {:id   1 :name "Lina"}
-                                    {:id   2 :name "Louise"}]
+           (is (= (-> (create-game [{:name "Miguel" :id   0} {:id   1 :name "Lina"} {:id   2 :name "Louise"}]
                                    [:insanitys-grasp :paranoia])
                       (reveal-card 1 0 9)
                       (reveal-card 0 1 1)
                       (reveal-card 1 2 2)
                       (reveal-card 2 0 0)
                       (:player-id-in-turn))
-                  0)))}
+                  0))
+           (is (= (-> (create-game [{:name "Miguel" :id   0} {:id   1 :name "Lina"}]
+                                   [:evil-presence])
+                      (reveal-card 1 0 1)
+                      (get-player 0)
+                      (:cards))
+                  []))
+           (is (= (as-> (create-game [{:name "Miguel" :id   0} {:id   1 :name "Lina"}]
+                                     [:evil-presence]) $
+                    (reveal-card $ 1 0 1)
+                    (reveal-card $ 0 1 0)
+                    (:players $)
+                    (map #(count (:cards %)) $))
+                  [4 4])))}
   [state player-id target-player-id card-id]
   (when-not (= player-id (:player-id-in-turn state))
     (throw (AssertionError. (str "Player with id " player-id " is not in turn!"))))
@@ -203,7 +224,7 @@
                                          (assoc :from-player-id target-player-id)))
         (update-round)
         (update-player-id-in-turn target-player-id)
-        (activate-power (:entity revealed-card)))))
+        (activate-power target-player-id (:entity revealed-card)))))
 
 (comment
   (-> (create-game [{:name "Miguel" :id 0}
