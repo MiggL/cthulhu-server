@@ -166,7 +166,7 @@
     (-> state
         (update :round inc)
         (assoc :round-action 1)
-        (assoc :active-powers [])
+        (assoc :active-powers {})
         (maybe-redistribute-unrevealed-cards))))
 
 (defn- update-player-id-in-turn
