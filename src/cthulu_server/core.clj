@@ -4,7 +4,7 @@
             [ysera.random :refer [shuffle-with-seed
                                   get-random-int]]))
 
-(def valid-objects-of-power #{:insanitys-grasp :paranoia :evil-presence})
+(def valid-objects-of-power #{:insanitys-grasp :paranoia :evil-presence :private-eye})
 
 (defn- potential-number-of-investigators
   [number-of-players]
@@ -164,17 +164,19 @@
     (assoc state :player-id-in-turn player-id)))
 
 (defn- activate-power
-  [state target-player-id target-card-entity]
+  [state investigator-id target-player-id target-card-entity]
   ; round is updated just before this function is called,
-  ; so we need to make sure powers don't activate when a new round starts
-  (if (= 1 (:round-action state))
-    state
-    (condp = target-card-entity
-      :paranoia (update state :active-powers conj :paranoia)
-      :evil-presence (-> state
-                         (update :reshuffle-pile concat (:cards (get-player state target-player-id)))
-                         (update-player target-player-id #(assoc % :cards [])))
-      state)))
+  ; so we need to make sure relevant powers don't activate when a new round starts
+  (condp = target-card-entity
+    :private-eye (update-player state target-player-id #(assoc % :reveal-role-to-player investigator-id))
+    (if (= 1 (:round-action state))
+      state
+      (condp = target-card-entity
+        :paranoia (update state :active-powers conj :paranoia)
+        :evil-presence (-> state
+                           (update :reshuffle-pile concat (:cards (get-player state target-player-id)))
+                           (update-player target-player-id #(assoc % :cards [])))
+        state))))
 
 (defn reveal-card
   {:test (fn []
@@ -224,7 +226,7 @@
                                          (assoc :from-player-id target-player-id)))
         (update-round)
         (update-player-id-in-turn target-player-id)
-        (activate-power target-player-id (:entity revealed-card)))))
+        (activate-power player-id target-player-id (:entity revealed-card)))))
 
 (comment
   (-> (create-game [{:name "Miguel" :id 0}

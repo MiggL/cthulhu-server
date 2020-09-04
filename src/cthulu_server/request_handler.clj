@@ -11,17 +11,17 @@
   [game-state player-id]
   (if (game-ended? game-state)
     (assoc game-state :player-id-in-turn -1) ; if set to nil client will do wrong
-    (update
-     game-state
-     :players
-     (fn [players]
-       (map (fn [player]
-              (if (= player-id (:id player))
-                player
-                (-> player
-                    (dissoc :role)
-                    (update :cards (fn [cards] (map #(assoc % :entity :unknown) cards))))))
-            players)))))
+    (-> game-state
+        (dissoc :reshuffle-pile)
+        (update :players (fn [players]
+                           (map (fn [player]
+                                  (if (= player-id (:id player))
+                                    player
+                                    (let [player (update player :cards (fn [cards] (map #(assoc % :entity :unknown) cards)))]
+                                      (if (= player-id (:reveal-role-to-player player))
+                                        player
+                                        (dissoc player :role)))))
+                                players))))))
 
 (defn prepare-game-state-for-all-channels
   [state]
