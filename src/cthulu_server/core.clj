@@ -174,27 +174,15 @@
   (assoc state :player-id-in-turn (or (get-in state [:active-powers :paranoia])
                                       player-id)))
 
-(defn- remove-first-match
-  [coll pred]
-  (loop [to-search coll
-         new-coll  []]
-    (cond
-      (empty? to-search)
-      new-coll
-      
-      (pred (first to-search))
-      (concat new-coll (rest to-search))
-      
-      :else
-      (recur (rest to-search) (conj new-coll (first to-search))))))
-
 (defn- activate-power
   [state investigator-id target-player-id target-card-entity]
   (condp = target-card-entity
-    :mirage      (if-let [revealed-elder-signs (seq (filter #(= :elder-sign (:entity %)) (:revealed-cards state)))]
+    :mirage      (if-let [revealed-elder-sign (->> (:revealed-cards state)
+                                                   (filter #(= :elder-sign (:entity %)))
+                                                   (first))]
                    (-> state
-                       (update :reshuffle-pile conj (first revealed-elder-signs))
-                       (update :revealed-cards remove-first-match #(= :elder-sign (:entity %))))
+                       (update :reshuffle-pile conj revealed-elder-sign)
+                       (update :revealed-cards (partial remove #(= % revealed-elder-sign))))
                    state)
     :private-eye (update-player state target-player-id #(assoc % :reveal-role-to-player investigator-id))
     :paranoia (assoc-in state [:active-powers :paranoia] target-player-id)
