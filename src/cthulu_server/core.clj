@@ -4,7 +4,7 @@
             [ysera.random :refer [shuffle-with-seed
                                   get-random-int]]))
 
-(def valid-objects-of-power #{:insanitys-grasp :paranoia :evil-presence :private-eye})
+(def valid-objects-of-power #{:insanitys-grasp :paranoia :evil-presence :private-eye :mirage})
 
 (defn- potential-number-of-investigators
   [number-of-players]
@@ -91,7 +91,7 @@
                                        players))
       :revealed-cards    []
       :reshuffle-pile    []
-      :active-powers     []
+      :active-powers     {}
       :player-id-in-turn starting-player-id
       :round             1
       :round-action      1
@@ -133,7 +133,18 @@
       (= (count players) (count (filter #(= :elder-sign (:entity %)) revealed-cards)))
       (boolean (seq (filter #(= :cthulu (:entity %)) revealed-cards)))))
 
-(defn- maybe-redistribute-unrevealed-cards
+(defn maybe-redistribute-unrevealed-cards
+  {:test (fn []
+           (is (= (as-> (create-game [{:name "Miguel" :id 0} {:name "Stefan" :id 1}]) $
+                    (maybe-redistribute-unrevealed-cards $)
+                    (:players $)
+                    (map #(count (:cards %)) $))
+                  [5 5]))
+           (is (-> (create-game [{:name "Miguel" :id 0} {:name "Stefan" :id 1}])
+                   (assoc :reshuffle-pile [{:entity :elder-sign :id -1}])
+                   (maybe-redistribute-unrevealed-cards)
+                   (:reshuffle-pile)
+                   (empty?))))}
   [state]
   (if (game-ended? state)
     state
@@ -142,6 +153,7 @@
           partitioned-cards (partition (- 6 (:round state)) (map-indexed #(assoc %2 :id %1) shuffled-cards))]
       (-> state
           (assoc :seed seed)
+          (assoc :reshuffle-pile [])
           (update :players #(map-indexed (fn [i player]
                                            (assoc player :cards (nth partitioned-cards i)))
                                          %))))))
@@ -159,31 +171,44 @@
 
 (defn- update-player-id-in-turn
   [state player-id]
-  (if (some #(= :paranoia %) (:active-powers state))
-    state
-    (assoc state :player-id-in-turn player-id)))
+  (assoc state :player-id-in-turn (or (get-in state [:active-powers :paranoia])
+                                      player-id)))
+
+(defn- remove-first-match
+  [coll pred]
+  (loop [to-search coll
+         new-coll  []]
+    (cond
+      (empty? to-search)
+      new-coll
+      
+      (pred (first to-search))
+      (concat new-coll (rest to-search))
+      
+      :else
+      (recur (rest to-search) (conj new-coll (first to-search))))))
 
 (defn- activate-power
   [state investigator-id target-player-id target-card-entity]
-  ; round is updated just before this function is called,
-  ; so we need to make sure relevant powers don't activate when a new round starts
   (condp = target-card-entity
+    :mirage      (if-let [revealed-elder-signs (seq (filter #(= :elder-sign (:entity %)) (:revealed-cards state)))]
+                   (-> state
+                       (update :reshuffle-pile conj (first revealed-elder-signs))
+                       (update :revealed-cards remove-first-match #(= :elder-sign (:entity %))))
+                   state)
     :private-eye (update-player state target-player-id #(assoc % :reveal-role-to-player investigator-id))
-    (if (= 1 (:round-action state))
-      state
-      (condp = target-card-entity
-        :paranoia (update state :active-powers conj :paranoia)
-        :evil-presence (-> state
-                           (update :reshuffle-pile concat (:cards (get-player state target-player-id)))
-                           (update-player target-player-id #(assoc % :cards [])))
-        state))))
+    :paranoia (assoc-in state [:active-powers :paranoia] target-player-id)
+    :evil-presence (-> state
+                       (update :reshuffle-pile concat (:cards (get-player state target-player-id)))
+                       (update-player target-player-id #(assoc % :cards [])))
+    state))
 
 (defn reveal-card
   {:test (fn []
            (is (= (-> (create-game [{:name "Miguel" :id 0} {:id 1 :name "Lina"} {:id 2 :name "Louise"}])
                       (reveal-card 1 0 9)
                       (:revealed-cards))
-                  [{:entity :futile :from-player-id 0}]))
+                  [{:entity :futile :id 9}]))
            (is (= (-> (create-game [{:name "Miguel" :id 0} {:id 1 :name "Lina"} {:id 2 :name "Louise"}])
                       (reveal-card 1 0 9)
                       (:player-id-in-turn))
@@ -204,6 +229,13 @@
                       (:player-id-in-turn))
                   0))
            (is (= (-> (create-game [{:name "Miguel" :id   0} {:id   1 :name "Lina"}]
+                                   [:mirage]
+                                   1)
+                      (reveal-card 0 1 5)
+                      (reveal-card 1 0 9)
+                      (:revealed-cards))
+                  [{:entity :mirage :id 9} ]))
+           (is (= (-> (create-game [{:name "Miguel" :id   0} {:id   1 :name "Lina"}]
                                    [:evil-presence])
                       (reveal-card 1 0 1)
                       (get-player 0)
@@ -222,11 +254,10 @@
   (let [revealed-card (get-card state target-player-id card-id)]
     (-> state
         (remove-card-from-player target-player-id card-id)
-        (update :revealed-cards conj (-> (dissoc revealed-card :id)
-                                         (assoc :from-player-id target-player-id)))
+        (update :revealed-cards conj revealed-card)
+        (activate-power player-id target-player-id (:entity revealed-card))
         (update-round)
-        (update-player-id-in-turn target-player-id)
-        (activate-power player-id target-player-id (:entity revealed-card)))))
+        (update-player-id-in-turn target-player-id))))
 
 (comment
   (-> (create-game [{:name "Miguel" :id 0}
