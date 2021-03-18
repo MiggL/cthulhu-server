@@ -1,6 +1,9 @@
-# cthulu-server
+# *Don't Mess with Cthulhu* Backend
 
-FIXME: description
+The server needed to play my online version of the social deduction game *[Don't Mess with Cthulhu](https://www.boardgamegeek.com/boardgame/253786/dont-mess-cthulhu-deluxe)*.
+To be used with the [frontend](https://github.com/MiggL/cthulhu-client).
+
+Default configuration listens on port 8901.
 
 ## Installation
 
